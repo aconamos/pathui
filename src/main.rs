@@ -49,11 +49,3 @@ fn run(mut terminal: DefaultTerminal) -> Result<()> {
 fn render(frame: &mut Frame) {
     frame.render_widget("hello world", frame.area());
 }
-
-fn read_path() -> Result<Vec<String>> {
-    Ok(env::var("PATH")
-        .expect("PATH variable not present! Shutting down...")
-        .split(':')
-        .map(|str| String::from(str))
-        .collect())
-}
