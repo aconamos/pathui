@@ -5,20 +5,23 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, Paragraph, Widget},
     DefaultTerminal, Frame,
 };
-use std::{env, io};
+use std::{env, io, path::PathBuf};
 
-// Perhaps rename to SelectorWindow?
-/// TODO: Doc comment
+mod widgets {
+    pub mod select_menu;
+}
+
+use self::widgets::select_menu::SelectMenu;
+
+/// App instance. Contains logic to draw onto the terminal and to handle key presses.
 #[derive(Debug, Default)]
 pub struct App {
     exit: bool,
-    counter: u16,
     sel_menu: SelectMenu,
 }
 
-/// TODO: Doc comment
 impl App {
-    /// TODO: Doc comment
+    /// Main event loop. Draws this `App` onto the given `&mut DefaultTerminal` and handles events.
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
@@ -27,12 +30,19 @@ impl App {
         Ok(())
     }
 
-    /// TODO: Doc comment
+    /// Draws this app onto the given `&mut Frame`.
+    ///
+    /// It draws by rendering itself as a `Widget`. See: `impl Widget for &mut App`
     fn draw(&mut self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
     }
 
-    /// TODO: Doc comment
+    /// Blocks and handles the next key event from `event::read()`.
+    ///
+    /// Will forward any `KeyPress`'s to `handle_key_event()` for app logic.
+    ///
+    /// # Errors
+    /// Propagates errors from `event::read()`.
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(event) if event.kind == KeyEventKind::Press => {
@@ -43,90 +53,58 @@ impl App {
         Ok(())
     }
 
-    /// TODO: Doc comment
+    /// Handles a given `KeyEvent` by dispatching the correct method accordingly.
+    /// In other words, a fancy `match` expression.
     fn handle_key_event(&mut self, event: KeyEvent) {
         match event.code {
             KeyCode::Char('q') | KeyCode::Esc => self.exit = true,
-            KeyCode::Left => self.decrement_counter(),
-            KeyCode::Right => self.increment_counter(),
+            KeyCode::Up => self.sel_menu.sel_prev(),
+            KeyCode::Down => self.sel_menu.sel_next(),
+            KeyCode::Enter => self.sel_menu.toggle_status(),
             _ => {}
         }
     }
-
-    fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
-        let items: Vec<ListItem> = self
-            .sel_menu
-            .items
-            .iter()
-            .map(|it| ListItem::from(it.clone()))
-            .collect();
-
-        let list = List::new(items).highlight_symbol(">");
-
-        StatefulWidget::render(list, area, buf, &mut self.sel_menu.state);
-    }
-
-    fn increment_counter(&mut self) {
-        self.counter += 1;
-    }
-
-    fn decrement_counter(&mut self) {
-        self.counter -= 1;
-    }
 }
 
-/// TODO: Doc comment
 impl Widget for &mut App {
     /// TODO: Doc comment
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from("Counter App Tutorial".bold());
-        let instructions = Line::from(vec![
-            " Decrement ".into(),
-            "<Left>".blue().bold(),
-            " Increment ".into(),
-            "<Right>".blue().bold(),
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]);
+        let title = Line::from("Pathui".bold());
+        // let instructions = Line::from(vec![
+        //     " Decrement ".into(),
+        //     "<Left>".blue().bold(),
+        //     " Increment ".into(),
+        //     "<Right>".blue().bold(),
+        //     " Quit ".into(),
+        //     "<Q> ".blue().bold(),
+        // ]);
 
         let block = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions.centered())
+            //     .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        let counter_text = Text::from(vec![Line::from(vec![
-            "Value: ".into(),
-            self.counter.to_string().yellow(),
-        ])]);
+        // let counter_text = Text::from(vec![Line::from(vec![
+        //     "Value: ".into(),
+        //     self.counter.to_string().yellow(),
+        // ])]);
 
         // Paragraph::new(counter_text)
         // .centered()
         // .block(block)
         // .render(area, buf);
+        let [top, main] = Layout::vertical([Constraint::Fill(1), Constraint::Fill(14)])
+            .flex(layout::Flex::Legacy)
+            .areas(area);
 
-        self.render_list(area, buf);
+        Paragraph::new(Text::from("Pathui"))
+            .centered()
+            .block(block)
+            .render(top, buf);
+
+        self.sel_menu.render(main, buf);
     }
 }
 
-/// TODO: Doc comment
-#[derive(Debug)]
-struct SelectMenu {
-    items: Vec<String>,
-    state: ListState,
-}
-
-/// TODO: Doc comment
-impl SelectMenu {
-    /// TODO: Doc comment
-    pub fn new() -> SelectMenu {
-        SelectMenu {
-            items: read_path().unwrap(),
-            state: ListState::default(),
-        }
-    }
-}
-
-/// TODO: Doc comment
 // impl StatefulWidget for &SelectMenu {
 //     type State = ListState;
 
@@ -139,18 +117,13 @@ impl SelectMenu {
 //     }
 // }
 
-impl Default for SelectMenu {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// Helper method to read the environment PATH variable and populate a `Vec` with each path, split at `:`'s.
+pub fn read_path() -> io::Result<Vec<PathBuf>> {
+    let path = env::var_os("PATH").expect("PATH variable is not present!");
 
-pub fn read_path() -> io::Result<Vec<String>> {
-    Ok(env::var("PATH")
-        .expect("PATH variable not present! Shutting down...")
-        .split(':')
-        .map(|str| String::from(str))
-        .collect())
+    let paths = env::split_paths(&path).collect::<Vec<_>>();
+
+    Ok(paths)
 }
 
 #[cfg(test)]
