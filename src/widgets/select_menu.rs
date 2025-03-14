@@ -95,6 +95,52 @@ impl SelectMenu {
 
         Ok(())
     }
+
+    /// Gets the x-value corresponding the position of the cursor
+    pub fn get_cursor_ind(&mut self) -> Option<(usize, usize)> {
+        if let Some(i) = self.state.selected() {
+            let path_var = &mut self.items[i];
+
+            let os_str = path_var.path.as_mut_os_str().to_owned();
+
+            return Some((os_str.len(), i));
+        }
+
+        None
+    }
+
+    /// Appends to the selected path.
+    pub fn add_char_to_sel_path(&mut self, c: char) {
+        if let Some(i) = self.state.selected() {
+            let path_var = &mut self.items[i];
+
+            // Convert PathVar into a string, push to string, put back
+            let mut os_str = path_var.path.as_mut_os_str().to_owned();
+            os_str.push(c.to_string());
+            if os_str.len() == 1 {
+                path_var.active = true;
+            }
+            self.items[i].path = os_str.into();
+        }
+    }
+
+    /// Removes character from the selected path.
+    pub fn del_char_from_sel_path(&mut self) {
+        if let Some(i) = self.state.selected() {
+            let path_var = &mut self.items[i];
+
+            // Convert PathVar into a string, push to string, put back
+            let os_str = path_var.path.to_str().unwrap();
+            if os_str.len() == 0 {
+                return;
+            }
+            let (os_str, _) = os_str.split_at(os_str.len() - 1);
+            if os_str.len() == 0 {
+                path_var.active = false;
+            }
+            self.items[i].path = os_str.into();
+        }
+    }
 }
 
 impl Default for SelectMenu {

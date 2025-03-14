@@ -13,11 +13,24 @@ mod widgets {
 
 use self::widgets::select_menu::SelectMenu;
 
+#[derive(Debug, PartialEq, Eq)]
+enum InputMode {
+    Typing,
+    Navigating,
+}
+
+impl Default for InputMode {
+    fn default() -> Self {
+        InputMode::Navigating
+    }
+}
+
 /// App instance. Contains logic to draw onto the terminal and to handle key presses.
 #[derive(Debug, Default)]
 pub struct App {
     exit: bool,
     sel_menu: SelectMenu,
+    mode: InputMode,
 }
 
 impl App {
@@ -34,6 +47,11 @@ impl App {
     ///
     /// It draws by rendering itself as a `Widget`. See: `impl Widget for &mut App`
     fn draw(&mut self, frame: &mut Frame) {
+        if self.mode == InputMode::Typing {
+            if let Some((pos_x, pos_y)) = self.sel_menu.get_cursor_ind() {
+                frame.set_cursor_position(Position::new((pos_x + 5) as u16, (pos_y + 3) as u16));
+            }
+        }
         frame.render_widget(self, frame.area());
     }
 
@@ -56,12 +74,40 @@ impl App {
     /// Handles a given `KeyEvent` by dispatching the correct method accordingly.
     /// In other words, a fancy `match` expression.
     fn handle_key_event(&mut self, event: KeyEvent) {
+        match self.mode {
+            InputMode::Navigating => self.handle_nav_key_event(event),
+            InputMode::Typing => self.handle_type_key_event(event),
+        }
+    }
+
+    /// Handles a key event in Navigating mode.
+    fn handle_nav_key_event(&mut self, event: KeyEvent) {
         match event.code {
+            KeyCode::Enter => self.toggle_mode(),
             KeyCode::Char('q') | KeyCode::Esc => self.exit = true,
-            KeyCode::Up => self.sel_menu.sel_prev(),
-            KeyCode::Down => self.sel_menu.sel_next(),
-            KeyCode::Enter => self.sel_menu.toggle_status(),
+            KeyCode::Char('k') | KeyCode::Up => self.sel_menu.sel_prev(),
+            KeyCode::Char('j') | KeyCode::Down => self.sel_menu.sel_next(),
+            KeyCode::Char('h') | KeyCode::Left => self.sel_menu.sel_first(),
+            KeyCode::Char('l') | KeyCode::Right => self.sel_menu.toggle_status(),
             _ => {}
+        }
+    }
+
+    /// Handles a key event in Typing mode.
+    fn handle_type_key_event(&mut self, event: KeyEvent) {
+        match event.code {
+            KeyCode::Enter => self.toggle_mode(),
+            KeyCode::Backspace => self.sel_menu.del_char_from_sel_path(),
+            KeyCode::Char(c) => self.sel_menu.add_char_to_sel_path(c),
+            _ => {}
+        }
+    }
+
+    /// Helper to toggle the mode between Navigating and Typing.
+    fn toggle_mode(&mut self) {
+        self.mode = match self.mode {
+            InputMode::Navigating => InputMode::Typing,
+            InputMode::Typing => InputMode::Navigating,
         }
     }
 }
