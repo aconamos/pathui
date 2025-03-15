@@ -13,17 +13,14 @@ mod widgets {
 
 use self::widgets::select_menu::SelectMenu;
 
-#[derive(Debug, PartialEq, Eq)]
-enum InputMode {
-    Typing,
-    Navigating,
-    Grabbing,
-}
+/// A trait that provides methods to handle keys. Any widget which takes key input *should* implement this
+/// trait.
+pub trait KeyHandler {
+    /// Executes logic according to the given [`KeyCode`].
+    fn handle_key_code(self, key_code: KeyCode);
 
-impl Default for InputMode {
-    fn default() -> Self {
-        InputMode::Navigating
-    }
+    // TODO - Says that this window (which is currently focused) has had a movement that brings it out of focus
+    // fn surrender_focus(self);
 }
 
 /// App instance. Contains logic to draw onto the terminal and to handle key presses.
@@ -31,7 +28,6 @@ impl Default for InputMode {
 pub struct App {
     exit: bool,
     sel_menu: SelectMenu,
-    mode: InputMode,
 }
 
 impl App {
@@ -48,7 +44,7 @@ impl App {
     ///
     /// It draws by rendering itself as a `Widget`. See: `impl Widget for &mut App`
     fn draw(&mut self, frame: &mut Frame) {
-        if self.mode == InputMode::Typing {
+        if self.sel_menu.is_typing() {
             if let Some((pos_x, pos_y)) = self.sel_menu.get_cursor_ind() {
                 frame.set_cursor_position(Position::new((pos_x + 5) as u16, (pos_y + 3) as u16));
             }
@@ -65,61 +61,20 @@ impl App {
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(event) if event.kind == KeyEventKind::Press => {
-                self.handle_key_event(event);
+                if let KeyCode::Char('q') = event.code {
+                    self.exit = true;
+                }
+                self.handle_key_code(event.code);
             }
             _ => {}
         };
         Ok(())
     }
+}
 
-    /// Handles a given `KeyEvent` by dispatching the correct method accordingly.
-    /// In other words, a fancy `match` expression.
-    fn handle_key_event(&mut self, event: KeyEvent) {
-        match self.mode {
-            InputMode::Navigating => self.handle_nav_key_event(event),
-            InputMode::Typing => self.handle_type_key_event(event),
-            InputMode::Grabbing => self.handle_grab_key_event(event),
-        }
-    }
-
-    /// Handles a key event in Navigating mode.
-    fn handle_nav_key_event(&mut self, event: KeyEvent) {
-        match event.code {
-            KeyCode::Enter => self.mode = InputMode::Typing,
-            KeyCode::Char(' ') => {
-                self.mode = InputMode::Grabbing;
-                self.sel_menu.highlight_mode = InputMode::Grabbing
-            }
-            KeyCode::Char('q') | KeyCode::Esc => self.exit = true,
-            KeyCode::Char('k') | KeyCode::Up => self.sel_menu.sel_prev(),
-            KeyCode::Char('j') | KeyCode::Down => self.sel_menu.sel_next(),
-            KeyCode::Char('h') | KeyCode::Left => self.sel_menu.sel_first(),
-            KeyCode::Char('l') | KeyCode::Right => self.sel_menu.toggle_status(),
-            _ => {}
-        }
-    }
-
-    /// Handles a key event in Typing mode.
-    fn handle_type_key_event(&mut self, event: KeyEvent) {
-        match event.code {
-            KeyCode::Enter => self.mode = InputMode::Navigating,
-            KeyCode::Backspace => self.sel_menu.del_char_from_sel_path(),
-            KeyCode::Char(c) => self.sel_menu.add_char_to_sel_path(c),
-            _ => {}
-        }
-    }
-
-    /// Handles a key event in Grabbing mode.
-    fn handle_grab_key_event(&mut self, event: KeyEvent) {
-        match event.code {
-            KeyCode::Char(' ') => {
-                self.mode = InputMode::Navigating;
-                self.sel_menu.highlight_mode = InputMode::Navigating
-            }
-            KeyCode::Char('k') | KeyCode::Up => self.sel_menu.swap_up(),
-            KeyCode::Char('j') | KeyCode::Down => self.sel_menu.swap_down(),
-            _ => {}
-        }
+impl KeyHandler for &mut App {
+    fn handle_key_code(self, key_code: KeyCode) {
+        self.sel_menu.handle_key_code(key_code);
     }
 }
 
@@ -163,18 +118,6 @@ impl Widget for &mut App {
         instructions.render(bottom, buf);
     }
 }
-
-// impl StatefulWidget for &SelectMenu {
-//     type State = ListState;
-
-//     /// TODO: Doc comment
-//     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-//         // TODO: Clone? Really?
-//         let list = List::new(self.items.clone());
-
-//         StatefulWidget::render(list, area, buf, state);
-//     }
-// }
 
 /// Helper method to read the environment PATH variable and populate a `Vec` with each path, split at `:`'s.
 pub fn read_path() -> io::Result<Vec<PathBuf>> {

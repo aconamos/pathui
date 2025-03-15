@@ -1,14 +1,13 @@
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     prelude::*,
-    style::palette::tailwind::SLATE,
     symbols::border,
     widgets::{Block, List, ListItem, ListState, Paragraph, Widget},
     DefaultTerminal, Frame,
 };
 use std::{env, ffi::OsStr, io, path::PathBuf};
 
-use crate::InputMode;
+use crate::KeyHandler;
 
 /// Widget containing a list of selectable items and a corresponding state.
 ///
@@ -17,7 +16,15 @@ use crate::InputMode;
 pub struct SelectMenu {
     items: Vec<PathVar>,
     state: ListState,
-    pub highlight_mode: InputMode,
+    input_mode: InputMode,
+}
+
+#[derive(Debug, PartialEq, Eq, Default)]
+enum InputMode {
+    #[default]
+    Navigating,
+    Grabbing,
+    Typing,
 }
 
 /// Represents a path, either on or off.
@@ -28,12 +35,9 @@ struct PathVar {
 }
 
 impl PathVar {
-    /// Constructs a new PathVar with the given path and set to true.
+    /// Constructs a new [`PathVar`] with the given path and set to true.
     fn new(path: PathBuf) -> Self {
-        PathVar {
-            path: path,
-            active: true,
-        }
+        PathVar { path, active: true }
     }
 }
 
@@ -56,7 +60,7 @@ impl SelectMenu {
                 .map(|path| PathVar::new(path))
                 .collect(),
             state,
-            highlight_mode: InputMode::Navigating,
+            input_mode: InputMode::Navigating,
         }
     }
 
@@ -135,11 +139,11 @@ impl SelectMenu {
 
             // Convert PathVar into a string, push to string, put back
             let os_str = path_var.path.to_str().unwrap();
-            if os_str.len() == 0 {
+            if os_str.is_empty() {
                 return;
             }
             let (os_str, _) = os_str.split_at(os_str.len() - 1);
-            if os_str.len() == 0 {
+            if os_str.is_empty() {
                 path_var.active = false;
             }
             self.items[i].path = os_str.into();
@@ -147,7 +151,7 @@ impl SelectMenu {
     }
 
     /// TODO: Doc comment
-    pub fn swap_up(&mut self) {
+    fn swap_up(&mut self) {
         if let Some(i) = self.state.selected() {
             if i == 0 {
                 return;
@@ -160,7 +164,7 @@ impl SelectMenu {
     }
 
     /// TODO: Doc comment
-    pub fn swap_down(&mut self) {
+    fn swap_down(&mut self) {
         if let Some(i) = self.state.selected() {
             if i == self.items.len() - 1 {
                 return;
@@ -171,11 +175,59 @@ impl SelectMenu {
             self.sel_next();
         }
     }
+
+    /// Handles a key event in Navigating mode.
+    fn handle_nav_key_code(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Enter => self.input_mode = InputMode::Typing,
+            KeyCode::Char(' ') => self.input_mode = InputMode::Grabbing,
+            // KeyCode::Char('q') | KeyCode::Esc => self.exit = true,
+            KeyCode::Char('k') | KeyCode::Up => self.sel_prev(),
+            KeyCode::Char('j') | KeyCode::Down => self.sel_next(),
+            KeyCode::Char('h') | KeyCode::Left => self.sel_first(),
+            KeyCode::Char('l') | KeyCode::Right => self.toggle_status(),
+            _ => {}
+        }
+    }
+
+    /// Handles a key event in Typing mode.
+    fn handle_type_key_code(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Enter => self.input_mode = InputMode::Navigating,
+            KeyCode::Backspace => self.del_char_from_sel_path(),
+            KeyCode::Char(c) => self.add_char_to_sel_path(c),
+            _ => {}
+        }
+    }
+
+    /// Handles a key event in Grabbing mode.
+    fn handle_grab_key_code(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Char(' ') => self.input_mode = InputMode::Navigating,
+            KeyCode::Char('k') | KeyCode::Up => self.swap_up(),
+            KeyCode::Char('j') | KeyCode::Down => self.swap_down(),
+            _ => {}
+        }
+    }
+
+    pub fn is_typing(&self) -> bool {
+        self.input_mode == InputMode::Typing
+    }
 }
 
 impl Default for SelectMenu {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl KeyHandler for &mut SelectMenu {
+    fn handle_key_code(self, key_code: KeyCode) {
+        match self.input_mode {
+            InputMode::Navigating => self.handle_nav_key_code(key_code),
+            InputMode::Typing => self.handle_type_key_code(key_code),
+            InputMode::Grabbing => self.handle_grab_key_code(key_code),
+        }
     }
 }
 
@@ -186,7 +238,7 @@ impl Widget for &mut SelectMenu {
     {
         let mut items: Vec<ListItem> = self.items.iter().map(|it| ListItem::from(it)).collect();
 
-        if self.highlight_mode == InputMode::Grabbing {
+        if self.input_mode == InputMode::Grabbing {
             // This if let might be technically redundant, because something should always
             // be selected. If something isn't selected, our App should make sure we don't
             // end up running code in SelectMenu (don't let enter Edit/Grab mode).
