@@ -1,3 +1,8 @@
+//! Pathui - lightweight PATH swiss army knife in the terminal
+//!
+//! Usage:
+//! todo: fill this in lol
+
 use std::env;
 use std::io::Result;
 

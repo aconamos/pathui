@@ -1,3 +1,7 @@
+//! Contains some stuff :)
+//!
+//!
+
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     prelude::*,
@@ -8,6 +12,7 @@ use ratatui::{
 use std::{env, io, path::PathBuf};
 
 mod widgets {
+    pub mod confirm_popup;
     pub mod select_menu;
 }
 
@@ -31,7 +36,7 @@ pub struct App {
 }
 
 impl App {
-    /// Main event loop. Draws this `App` onto the given `&mut DefaultTerminal` and handles events.
+    /// Main event loop. Draws this [`App`] onto the given `&mut DefaultTerminal` and handles events.
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
@@ -42,7 +47,7 @@ impl App {
 
     /// Draws this app onto the given `&mut Frame`.
     ///
-    /// It draws by rendering itself as a `Widget`. See: `impl Widget for &mut App`
+    /// It draws by rendering itself as a [`Widget`]. See: `impl Widget for &mut App`
     fn draw(&mut self, frame: &mut Frame) {
         if self.sel_menu.is_typing() {
             if let Some((pos_x, pos_y)) = self.sel_menu.get_cursor_ind() {
@@ -52,12 +57,12 @@ impl App {
         frame.render_widget(self, frame.area());
     }
 
-    /// Blocks and handles the next key event from `event::read()`.
+    /// Blocks and handles the next key event from [`event::read()`].
     ///
-    /// Will forward any `KeyPress`'s to `handle_key_event()` for app logic.
+    /// Will forward any [`KeyCode`]s to [`KeyHandler::handle_key_code()`] for app logic.
     ///
     /// # Errors
-    /// Propagates errors from `event::read()`.
+    /// Propagates errors from [`event::read()`].
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(event) if event.kind == KeyEventKind::Press => {
@@ -97,9 +102,7 @@ impl Widget for &mut App {
             "<Q> ".blue().bold(),
         ]);
 
-        let block = Block::bordered()
-            //     .title_bottom(instructions.centered())
-            .border_set(border::THICK);
+        let block = Block::bordered().border_set(border::THICK);
 
         let [top, main, bottom] = Layout::vertical([
             Constraint::Length(3),
@@ -119,7 +122,7 @@ impl Widget for &mut App {
     }
 }
 
-/// Helper method to read the environment PATH variable and populate a `Vec` with each path, split at `:`'s.
+/// Helper method to read the environment `PATH` variable and populate a [`Vec`] with each path, split at `:`'s.
 pub fn read_path() -> io::Result<Vec<PathBuf>> {
     let path = env::var_os("PATH").expect("PATH variable is not present!");
 

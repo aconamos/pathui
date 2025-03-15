@@ -1,6 +1,12 @@
+//! The [`SelectMenu`] [`Widget`]. Provides a widget to select, move, and edit parts of the PATH variable.
+//!
+//! TODO: Allow to load other paths
+//! TODO: Write paths out
+
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     prelude::*,
+    style::palette::tailwind::{Palette, GRAY, SLATE},
     symbols::border,
     widgets::{Block, List, ListItem, ListState, Paragraph, Widget},
     DefaultTerminal, Frame,
@@ -64,31 +70,44 @@ impl SelectMenu {
         }
     }
 
-    pub fn sel_next(&mut self) {
+    /// Gets the x-value corresponding the position of the cursor
+    pub fn get_cursor_ind(&mut self) -> Option<(usize, usize)> {
+        if let Some(i) = self.state.selected() {
+            let path_var = &mut self.items[i];
+
+            let os_str = path_var.path.as_mut_os_str().to_owned();
+
+            return Some((os_str.len(), i));
+        }
+
+        None
+    }
+
+    fn sel_next(&mut self) {
         self.state.select_next();
     }
 
-    pub fn sel_prev(&mut self) {
+    fn sel_prev(&mut self) {
         self.state.select_previous();
     }
 
-    pub fn sel_first(&mut self) {
+    fn sel_first(&mut self) {
         self.state.select_first();
     }
 
-    pub fn sel_last(&mut self) {
+    fn sel_last(&mut self) {
         self.state.select_last();
     }
 
     /// Toggle the status of the selected list item
-    pub fn toggle_status(&mut self) {
+    fn toggle_status(&mut self) {
         if let Some(i) = self.state.selected() {
             self.items[i].active = !self.items[i].active
         }
     }
 
     /// Writes the given path contained within `self.items` to the environment.
-    pub fn write_path_to_env(&self) -> io::Result<()> {
+    fn write_path_to_env(&self) -> io::Result<()> {
         let paths: Vec<&OsStr> = self
             .items
             .iter()
@@ -104,21 +123,8 @@ impl SelectMenu {
         Ok(())
     }
 
-    /// Gets the x-value corresponding the position of the cursor
-    pub fn get_cursor_ind(&mut self) -> Option<(usize, usize)> {
-        if let Some(i) = self.state.selected() {
-            let path_var = &mut self.items[i];
-
-            let os_str = path_var.path.as_mut_os_str().to_owned();
-
-            return Some((os_str.len(), i));
-        }
-
-        None
-    }
-
     /// Appends to the selected path.
-    pub fn add_char_to_sel_path(&mut self, c: char) {
+    fn add_char_to_sel_path(&mut self, c: char) {
         if let Some(i) = self.state.selected() {
             let path_var = &mut self.items[i];
 
@@ -133,7 +139,7 @@ impl SelectMenu {
     }
 
     /// Removes character from the selected path.
-    pub fn del_char_from_sel_path(&mut self) {
+    fn del_char_from_sel_path(&mut self) {
         if let Some(i) = self.state.selected() {
             let path_var = &mut self.items[i];
 
@@ -150,7 +156,7 @@ impl SelectMenu {
         }
     }
 
-    /// TODO: Doc comment
+    /// Swaps the current item with the one above and keeps the selection, if possible
     fn swap_up(&mut self) {
         if let Some(i) = self.state.selected() {
             if i == 0 {
@@ -163,7 +169,7 @@ impl SelectMenu {
         }
     }
 
-    /// TODO: Doc comment
+    /// Swaps the current item with the one below and keeps the selection, if possible
     fn swap_down(&mut self) {
         if let Some(i) = self.state.selected() {
             if i == self.items.len() - 1 {
@@ -236,19 +242,36 @@ impl Widget for &mut SelectMenu {
     where
         Self: Sized,
     {
-        let mut items: Vec<ListItem> = self.items.iter().map(|it| ListItem::from(it)).collect();
-
-        if self.input_mode == InputMode::Grabbing {
-            // This if let might be technically redundant, because something should always
-            // be selected. If something isn't selected, our App should make sure we don't
-            // end up running code in SelectMenu (don't let enter Edit/Grab mode).
-            if let Some(i) = self.state.selected() {
-                // Stupid hack. Why need clone?
-                items[i] = items[i].clone().bg(Color::DarkGray)
+        // TODO: Fix this ugly if tree
+        let sel_ind = if let Some(i) = self.state.selected() {
+            if self.input_mode == InputMode::Grabbing {
+                i
+            } else {
+                self.items.len()
             }
-        }
+        } else {
+            self.items.len() // Terrible horrible yucky icky sentinel value //TODO REMOVE THIS
+        };
 
-        let list = List::new(items).highlight_symbol("> ");
+        let items: Vec<ListItem> = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(ind, path_var)| {
+                let mut list_item: ListItem = path_var.into();
+
+                if ind == sel_ind {
+                    list_item = list_item.bg(Color::Blue).fg(Color::Gray)
+                }
+
+                list_item
+            })
+            .collect();
+
+        let list = List::new(items).highlight_symbol(">");
+
+        // Confirmation pop-up
+        // (confirmation code goes here...)
 
         StatefulWidget::render(list, area, buf, &mut self.state);
     }
@@ -257,7 +280,7 @@ impl Widget for &mut SelectMenu {
 impl From<&PathVar> for ListItem<'_> {
     fn from(value: &PathVar) -> Self {
         let line = match value.active {
-            true => Line::from(format!(" ✓ {}", value.path.display())),
+            true => Line::from(format!("   {}", value.path.display())),
             false => Line::styled(format!("   {}", value.path.display()), Color::DarkGray),
         };
 
