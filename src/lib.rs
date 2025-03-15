@@ -17,6 +17,7 @@ use self::widgets::select_menu::SelectMenu;
 enum InputMode {
     Typing,
     Navigating,
+    Grabbing,
 }
 
 impl Default for InputMode {
@@ -77,13 +78,18 @@ impl App {
         match self.mode {
             InputMode::Navigating => self.handle_nav_key_event(event),
             InputMode::Typing => self.handle_type_key_event(event),
+            InputMode::Grabbing => self.handle_grab_key_event(event),
         }
     }
 
     /// Handles a key event in Navigating mode.
     fn handle_nav_key_event(&mut self, event: KeyEvent) {
         match event.code {
-            KeyCode::Enter => self.toggle_mode(),
+            KeyCode::Enter => self.mode = InputMode::Typing,
+            KeyCode::Char(' ') => {
+                self.mode = InputMode::Grabbing;
+                self.sel_menu.highlight_mode = InputMode::Grabbing
+            }
             KeyCode::Char('q') | KeyCode::Esc => self.exit = true,
             KeyCode::Char('k') | KeyCode::Up => self.sel_menu.sel_prev(),
             KeyCode::Char('j') | KeyCode::Down => self.sel_menu.sel_next(),
@@ -96,51 +102,56 @@ impl App {
     /// Handles a key event in Typing mode.
     fn handle_type_key_event(&mut self, event: KeyEvent) {
         match event.code {
-            KeyCode::Enter => self.toggle_mode(),
+            KeyCode::Enter => self.mode = InputMode::Navigating,
             KeyCode::Backspace => self.sel_menu.del_char_from_sel_path(),
             KeyCode::Char(c) => self.sel_menu.add_char_to_sel_path(c),
             _ => {}
         }
     }
 
-    /// Helper to toggle the mode between Navigating and Typing.
-    fn toggle_mode(&mut self) {
-        self.mode = match self.mode {
-            InputMode::Navigating => InputMode::Typing,
-            InputMode::Typing => InputMode::Navigating,
+    /// Handles a key event in Grabbing mode.
+    fn handle_grab_key_event(&mut self, event: KeyEvent) {
+        match event.code {
+            KeyCode::Char(' ') => {
+                self.mode = InputMode::Navigating;
+                self.sel_menu.highlight_mode = InputMode::Navigating
+            }
+            KeyCode::Char('k') | KeyCode::Up => self.sel_menu.swap_up(),
+            KeyCode::Char('j') | KeyCode::Down => self.sel_menu.swap_down(),
+            _ => {}
         }
     }
 }
 
 impl Widget for &mut App {
-    /// TODO: Doc comment
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from("Pathui".bold());
-        // let instructions = Line::from(vec![
-        //     " Decrement ".into(),
-        //     "<Left>".blue().bold(),
-        //     " Increment ".into(),
-        //     "<Right>".blue().bold(),
-        //     " Quit ".into(),
-        //     "<Q> ".blue().bold(),
-        // ]);
+        let instructions = Line::from(vec![
+            " Top ".into(),
+            "<Left> / <h>".blue().bold(),
+            " | Down ".into(),
+            "<Down> / <j>".blue().bold(),
+            " | Up ".into(),
+            "<Up> / <k>".blue().bold(),
+            " | Select/Unselect ".into(),
+            "<Right> / <l>".blue().bold(),
+            " | Edit ".into(),
+            "<Enter>".blue().bold(),
+            " | Pick Up/Drop ".into(),
+            "<Space>".blue().bold(),
+            " | Quit ".into(),
+            "<Q> ".blue().bold(),
+        ]);
 
         let block = Block::bordered()
             //     .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        // let counter_text = Text::from(vec![Line::from(vec![
-        //     "Value: ".into(),
-        //     self.counter.to_string().yellow(),
-        // ])]);
-
-        // Paragraph::new(counter_text)
-        // .centered()
-        // .block(block)
-        // .render(area, buf);
-        let [top, main] = Layout::vertical([Constraint::Fill(1), Constraint::Fill(14)])
-            .flex(layout::Flex::Legacy)
-            .areas(area);
+        let [top, main, bottom] = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Fill(1),
+            Constraint::Length(3),
+        ])
+        .areas(area);
 
         Paragraph::new(Text::from("Pathui"))
             .centered()
@@ -148,6 +159,8 @@ impl Widget for &mut App {
             .render(top, buf);
 
         self.sel_menu.render(main, buf);
+
+        instructions.render(bottom, buf);
     }
 }
 

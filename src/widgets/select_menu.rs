@@ -8,13 +8,16 @@ use ratatui::{
 };
 use std::{env, ffi::OsStr, io, path::PathBuf};
 
+use crate::InputMode;
+
 /// Widget containing a list of selectable items and a corresponding state.
 ///
-/// To achieve stateful behavior, a `List` is created each render and rendered statefully using `self.state`.
+/// To achieve stateful behavior, a [`List`] is created each render and rendered statefully using `self.state`.
 #[derive(Debug)]
 pub struct SelectMenu {
     items: Vec<PathVar>,
     state: ListState,
+    pub highlight_mode: InputMode,
 }
 
 /// Represents a path, either on or off.
@@ -41,7 +44,7 @@ impl AsRef<OsStr> for PathVar {
 }
 
 impl SelectMenu {
-    /// Creates a new `SelectMenu` with the contents of the environment PATH variable and a default `ListState`.
+    /// Creates a new [`SelectMenu`] with the contents of the environment `PATH` variable and a default [`ListState`].
     pub fn new() -> SelectMenu {
         let mut state = ListState::default();
         state.select(Some(0));
@@ -53,6 +56,7 @@ impl SelectMenu {
                 .map(|path| PathVar::new(path))
                 .collect(),
             state,
+            highlight_mode: InputMode::Navigating,
         }
     }
 
@@ -141,6 +145,32 @@ impl SelectMenu {
             self.items[i].path = os_str.into();
         }
     }
+
+    /// TODO: Doc comment
+    pub fn swap_up(&mut self) {
+        if let Some(i) = self.state.selected() {
+            if i == 0 {
+                return;
+            }
+
+            self.items.swap(i, i - 1);
+
+            self.sel_prev();
+        }
+    }
+
+    /// TODO: Doc comment
+    pub fn swap_down(&mut self) {
+        if let Some(i) = self.state.selected() {
+            if i == self.items.len() - 1 {
+                return;
+            }
+
+            self.items.swap(i, i + 1);
+
+            self.sel_next();
+        }
+    }
 }
 
 impl Default for SelectMenu {
@@ -154,12 +184,20 @@ impl Widget for &mut SelectMenu {
     where
         Self: Sized,
     {
-        let items: Vec<ListItem> = self.items.iter().map(|it| ListItem::from(it)).collect();
+        let mut items: Vec<ListItem> = self.items.iter().map(|it| ListItem::from(it)).collect();
+
+        if self.highlight_mode == InputMode::Grabbing {
+            // This if let might be technically redundant, because something should always
+            // be selected. If something isn't selected, our App should make sure we don't
+            // end up running code in SelectMenu (don't let enter Edit/Grab mode).
+            if let Some(i) = self.state.selected() {
+                // Stupid hack. Why need clone?
+                items[i] = items[i].clone().bg(Color::DarkGray)
+            }
+        }
 
         let list = List::new(items).highlight_symbol("> ");
 
-        // Do we really need to be using state here?
-        // It feels right on paper, but wrong in code.
         StatefulWidget::render(list, area, buf, &mut self.state);
     }
 }
@@ -168,7 +206,7 @@ impl From<&PathVar> for ListItem<'_> {
     fn from(value: &PathVar) -> Self {
         let line = match value.active {
             true => Line::from(format!(" ✓ {}", value.path.display())),
-            false => Line::styled(format!("   {}", value.path.display()), SLATE.c200),
+            false => Line::styled(format!("   {}", value.path.display()), Color::DarkGray),
         };
 
         ListItem::new(line)
