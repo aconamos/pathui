@@ -24,3 +24,7 @@ impl Widget for &mut ConfirmationMenu {
     {
     }
 }
+
+// trait Confirmable??
+// This would essentially make every widget that implements it check for whether or not it is in the
+// menu before advancing its state. This might work?

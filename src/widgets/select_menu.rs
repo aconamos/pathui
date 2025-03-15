@@ -242,15 +242,13 @@ impl Widget for &mut SelectMenu {
     where
         Self: Sized,
     {
-        // TODO: Fix this ugly if tree
-        let sel_ind = if let Some(i) = self.state.selected() {
-            if self.input_mode == InputMode::Grabbing {
-                i
-            } else {
-                self.items.len()
-            }
+        // TODO: Can probably still use Option here instead
+        let sel_ind = if self.input_mode != InputMode::Grabbing {
+            self.items.len()
+        } else if let Some(i) = self.state.selected() {
+            i
         } else {
-            self.items.len() // Terrible horrible yucky icky sentinel value //TODO REMOVE THIS
+            self.items.len()
         };
 
         let items: Vec<ListItem> = self

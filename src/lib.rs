@@ -51,7 +51,7 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         if self.sel_menu.is_typing() {
             if let Some((pos_x, pos_y)) = self.sel_menu.get_cursor_ind() {
-                frame.set_cursor_position(Position::new((pos_x + 5) as u16, (pos_y + 3) as u16));
+                frame.set_cursor_position(Position::new((pos_x + 4) as u16, (pos_y + 3) as u16));
             }
         }
         frame.render_widget(self, frame.area());
