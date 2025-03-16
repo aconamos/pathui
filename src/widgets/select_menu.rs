@@ -5,6 +5,7 @@
 
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    layout::Flex,
     prelude::*,
     style::palette::tailwind::{Palette, GRAY, SLATE},
     symbols::border,
@@ -13,7 +14,7 @@ use ratatui::{
 };
 use std::{env, ffi::OsStr, io, path::PathBuf};
 
-use crate::KeyHandler;
+use crate::{widgets::confirm_popup::ConfirmationMenu, KeyHandler, RequestExit};
 
 /// Widget containing a list of selectable items and a corresponding state.
 ///
@@ -23,6 +24,7 @@ pub struct SelectMenu {
     items: Vec<PathVar>,
     state: ListState,
     input_mode: InputMode,
+    wants_quit: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Default)]
@@ -67,6 +69,7 @@ impl SelectMenu {
                 .collect(),
             state,
             input_mode: InputMode::Navigating,
+            wants_quit: false,
         }
     }
 
@@ -187,7 +190,7 @@ impl SelectMenu {
         match key_code {
             KeyCode::Enter => self.input_mode = InputMode::Typing,
             KeyCode::Char(' ') => self.input_mode = InputMode::Grabbing,
-            // KeyCode::Char('q') | KeyCode::Esc => self.exit = true,
+            KeyCode::Char('q') | KeyCode::Esc => self.wants_quit = true,
             KeyCode::Char('k') | KeyCode::Up => self.sel_prev(),
             KeyCode::Char('j') | KeyCode::Down => self.sel_next(),
             KeyCode::Char('h') | KeyCode::Left => self.sel_first(),
@@ -216,6 +219,17 @@ impl SelectMenu {
         }
     }
 
+    /// Handles a key event in Confirming mode.
+    fn handle_confirm_key_code(&mut self, key_code: KeyCode) {
+        match key_code {
+            KeyCode::Char('h') | KeyCode::Left => todo!("Left confirm"),
+            KeyCode::Char('l') | KeyCode::Right => todo!("Right confirm"),
+            KeyCode::Char(' ') | KeyCode::Enter => todo!("Confirm"),
+            KeyCode::Char('q') | KeyCode::Esc => todo!("Exit confirm early"),
+            _ => {}
+        }
+    }
+
     pub fn is_typing(&self) -> bool {
         self.input_mode == InputMode::Typing
     }
@@ -224,6 +238,12 @@ impl SelectMenu {
 impl Default for SelectMenu {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl RequestExit for SelectMenu {
+    fn wants_quit(&self) -> bool {
+        self.wants_quit
     }
 }
 
@@ -272,6 +292,11 @@ impl Widget for &mut SelectMenu {
         // (confirmation code goes here...)
 
         StatefulWidget::render(list, area, buf, &mut self.state);
+
+        // if needs_confirm
+        let popup_area = popup_area(area, 30, 30);
+
+        ConfirmationMenu::new(" Write changes? ").render(popup_area, buf);
     }
 }
 
@@ -284,4 +309,13 @@ impl From<&PathVar> for ListItem<'_> {
 
         ListItem::new(line)
     }
+}
+
+/// helper function (shamelessly stolen from the ratatui docs) to create a centered rect using up certain percentage of the available rect `r`
+fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
 }

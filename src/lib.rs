@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, Paragraph, Widget},
     DefaultTerminal, Frame,
 };
-use std::{env, io, path::PathBuf};
+use std::{env, io, path::PathBuf, rc::Rc};
 
 mod widgets {
     pub mod confirm_popup;
@@ -26,6 +26,11 @@ pub trait KeyHandler {
 
     // TODO - Says that this window (which is currently focused) has had a movement that brings it out of focus
     // fn surrender_focus(self);
+}
+
+/// A trait that allows components within the App to request the application to quit.
+pub trait RequestExit {
+    fn wants_quit(&self) -> bool;
 }
 
 /// App instance. Contains logic to draw onto the terminal and to handle key presses.
@@ -63,16 +68,25 @@ impl App {
     ///
     /// # Errors
     /// Propagates errors from [`event::read()`].
+    ///
+    /// # Notes
+    /// This does not handle quitting in and of itself. The widgets inside this App
+    /// are what handle any quitting behavior. This might (should) be changed in the
+    /// future.
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(event) if event.kind == KeyEventKind::Press => {
-                if let KeyCode::Char('q') = event.code {
-                    self.exit = true;
-                }
                 self.handle_key_code(event.code);
             }
             _ => {}
         };
+
+        // In the future, this will likely be an any() on some collection of every
+        // widget in this app.
+        if self.sel_menu.wants_quit() {
+            self.exit = true;
+        }
+
         Ok(())
     }
 }
