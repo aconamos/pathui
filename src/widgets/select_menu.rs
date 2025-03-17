@@ -33,6 +33,7 @@ enum InputMode {
     Navigating,
     Grabbing,
     Typing,
+    Confirming,
 }
 
 /// Represents a path, either on or off.
@@ -80,7 +81,7 @@ impl SelectMenu {
 
             let os_str = path_var.path.as_mut_os_str().to_owned();
 
-            return Some((os_str.len(), i));
+            return Some((os_str.len(), i - self.state.offset()));
         }
 
         None
@@ -195,6 +196,7 @@ impl SelectMenu {
             KeyCode::Char('j') | KeyCode::Down => self.sel_next(),
             KeyCode::Char('h') | KeyCode::Left => self.sel_first(),
             KeyCode::Char('l') | KeyCode::Right => self.toggle_status(),
+            // KeyCode::Char('w') => self.input_mode = InputMode::Confirming,
             _ => {}
         }
     }
@@ -222,8 +224,9 @@ impl SelectMenu {
     /// Handles a key event in Confirming mode.
     fn handle_confirm_key_code(&mut self, key_code: KeyCode) {
         match key_code {
-            KeyCode::Char('h') | KeyCode::Left => todo!("Left confirm"),
-            KeyCode::Char('l') | KeyCode::Right => todo!("Right confirm"),
+            KeyCode::Char('h') | KeyCode::Left | KeyCode::Char('l') | KeyCode::Right => {
+                todo!("Right confirm")
+            }
             KeyCode::Char(' ') | KeyCode::Enter => todo!("Confirm"),
             KeyCode::Char('q') | KeyCode::Esc => todo!("Exit confirm early"),
             _ => {}
@@ -253,6 +256,7 @@ impl KeyHandler for &mut SelectMenu {
             InputMode::Navigating => self.handle_nav_key_code(key_code),
             InputMode::Typing => self.handle_type_key_code(key_code),
             InputMode::Grabbing => self.handle_grab_key_code(key_code),
+            InputMode::Confirming => {}
         }
     }
 }
@@ -292,11 +296,6 @@ impl Widget for &mut SelectMenu {
         // (confirmation code goes here...)
 
         StatefulWidget::render(list, area, buf, &mut self.state);
-
-        // if needs_confirm
-        let popup_area = popup_area(area, 30, 30);
-
-        ConfirmationMenu::new(" Write changes? ").render(popup_area, buf);
     }
 }
 
@@ -312,8 +311,8 @@ impl From<&PathVar> for ListItem<'_> {
 }
 
 /// helper function (shamelessly stolen from the ratatui docs) to create a centered rect using up certain percentage of the available rect `r`
-fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+fn popup_area(area: Rect, percent_x: u16, pixel_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Length(pixel_y)]).flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
